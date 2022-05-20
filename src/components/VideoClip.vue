@@ -13,8 +13,8 @@
 import random from 'random';
 import seedrandom from 'seedrandom';
 
-const CLIP_LENGTH = 45;
-const SHOW_VIDEO_AT = 30;
+const CLIP_LENGTH = 30;
+const SHOW_VIDEO_AT = 20;
 const PREVIEW_LENGTH = 15;
 const REVIEW_LENGTH = 10;
 
