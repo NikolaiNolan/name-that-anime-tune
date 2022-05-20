@@ -172,6 +172,7 @@ export default {
       this.rightBuzzed = false;
       this.reviewing = false;
       this.previewing = false;
+      this.playing = false;
       this.index += 1;
     },
     nextPlay() {
