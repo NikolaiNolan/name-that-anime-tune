@@ -198,7 +198,6 @@ export default {
     },
     timeUp() {
       this.$refs.timeUpSound.play();
-      this.play();
     },
   },
   created() {
