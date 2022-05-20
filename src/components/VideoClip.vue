@@ -59,6 +59,7 @@ export default {
   methods: {
     setDuration() {
       this.startClipAt = random.float(0, this.$el.duration);
+      if (this.startClipAt + CLIP_LENGTH >= this.$el.duration) this.startClipAt = 0;
       this.showVideoAt = this.startClipAt + SHOW_VIDEO_AT;
       this.endClipAt = this.startClipAt + CLIP_LENGTH;
       this.$el.currentTime = this.startClipAt;
