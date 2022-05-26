@@ -46,7 +46,7 @@
         {{name.right}}
       </div>
     </div>
-    <footer v-if="!name.left && !name.center && !name.right" class="footer">
+    <footer class="footer">
       Name That Anime Tune
     </footer>
     <audio
@@ -269,7 +269,7 @@ export default {
   }
 
   .score {
-    @include position(absolute, null null 5vmin);
+    @include position(absolute, null null 12vmin);
     font: {
       size: 12.5vmin;
       weight: bold;
