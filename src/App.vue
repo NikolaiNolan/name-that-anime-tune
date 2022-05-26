@@ -28,6 +28,15 @@
         {{name.left}}
       </div>
     </div>
+    <div class="score score--center">
+      {{score.center || null}}
+      <div
+        class="name"
+        :class="{ buzzing: centerBuzzing }"
+      >
+        {{name.center}}
+      </div>
+    </div>
     <div class="score score--right">
       {{score.right || null}}
       <div
@@ -37,16 +46,12 @@
         {{name.right}}
       </div>
     </div>
-    <footer class="footer">
+    <footer v-if="!name.left && !name.center && !name.right" class="footer">
       Name That Anime Tune
     </footer>
     <audio
       ref="leftSound"
       src="/sounds/buzzin.ogg"
-    />
-    <audio
-      ref="rightSound"
-      src="/sounds/buzzin2.ogg"
     />
     <audio
       ref="timeUpSound"
@@ -56,7 +61,7 @@
       Click to initialize
     </div>
     <div
-      v-if="!name.left && !name.right"
+      v-if="!name.left && !name.center && !name.right"
       class="credit"
     >
       Illustration: deviantart.com/armyovskul
@@ -91,10 +96,12 @@ export default {
       name: {},
       lastBuzz: null,
       leftBuzzing: false,
+      centerBuzzing: false,
       rightBuzzing: false,
       leftBuzzed: false,
+      centerBuzzed: false,
       rightBuzzed: false,
-      score: { left: 0, right: 0 },
+      score: { left: 0, center: 0, right: 0 },
       timeout: () => {},
     };
   },
@@ -138,6 +145,7 @@ export default {
     },
     play() {
       this.leftBuzzing = false;
+      this.centerBuzzing = false;
       this.rightBuzzing = false;
       this.playing = true;
     },
@@ -146,6 +154,7 @@ export default {
     },
     correct() {
       this.leftBuzzing = false;
+      this.centerBuzzing = false;
       this.rightBuzzing = false;
       clearTimeout(this.timeout);
       this.postMessage(`${this.lastBuzz}Plus`);
@@ -167,8 +176,10 @@ export default {
     },
     next() {
       this.leftBuzzing = false;
+      this.centerBuzzing = false;
       this.rightBuzzing = false;
       this.leftBuzzed = false;
+      this.centerBuzzed = false;
       this.rightBuzzed = false;
       this.reviewing = false;
       this.previewing = false;
@@ -188,9 +199,18 @@ export default {
       this.pause();
       this.timeout = setTimeout(this.timeUp, ANSWER_WAIT * 1000);
     },
+    centerBuzz() {
+      if (!this.playing || this.centerBuzzed) return;
+      this.$refs.leftSound.play();
+      this.centerBuzzing = true;
+      this.centerBuzzed = true;
+      this.lastBuzz = 'center';
+      this.pause();
+      this.timeout = setTimeout(this.timeUp, ANSWER_WAIT * 1000);
+    },
     rightBuzz() {
       if (!this.playing || this.rightBuzzed) return;
-      this.$refs.rightSound.play();
+      this.$refs.leftSound.play();
       this.rightBuzzing = true;
       this.rightBuzzed = true;
       this.lastBuzz = 'right';
@@ -259,6 +279,11 @@ export default {
     &--left {
       left: 5vmin;
       text-align: left;
+    }
+    &--center {
+      left: 5vmin;
+      right: 5vmin;
+      text-align: center;
     }
     &--right {
       right: 5vmin;

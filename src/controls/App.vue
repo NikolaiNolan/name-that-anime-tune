@@ -8,6 +8,11 @@
       type="number"
       v-model.number="score.left"
     /><br>
+    Center player: <input v-model="name.center" /><br>
+    <input
+      type="number"
+      v-model.number="score.center"
+    /><br>
     Right player: <input v-model="name.right" /><br>
     <input
       type="number"
@@ -35,8 +40,8 @@ const channel = new BroadcastChannel('channel');
 export default {
   data() {
     return {
-      name: { left: null, right: null },
-      score: { left: 0, right: 0 },
+      name: { left: null, center: null, right: null },
+      score: { left: 0, center: 0, right: 0 },
       index: 1,
       video: {},
     };
@@ -69,12 +74,16 @@ export default {
     leftPlus() {
       this.score.left += 1;
     },
+    centerPlus() {
+      this.score.center += 1;
+    },
     rightPlus() {
       this.score.right += 1;
     },
     checkKey({ key }) {
       if (key === '[') this.postMessage('leftBuzz');
-      if (key === ']') this.postMessage('rightBuzz');
+      if (key === ']') this.postMessage('centerBuzz');
+      if (key === '\\') this.postMessage('rightBuzz');
     },
   },
   created() {
