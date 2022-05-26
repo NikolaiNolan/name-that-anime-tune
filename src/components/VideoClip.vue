@@ -83,7 +83,7 @@ export default {
     @include position(absolute, 0);
     @include size(100vw, 100vh);
     background-color: black;
-    object-fit: contain;
+    object-fit: cover;
   }
 
   :not(.visible) {
