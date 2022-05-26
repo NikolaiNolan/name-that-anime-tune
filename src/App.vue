@@ -57,9 +57,9 @@
       ref="timeUpSound"
       src="/sounds/timeup.ogg"
     />
-    <div v-if="!initialized">
+    <a v-if="!initialized" href="/controls.html" target="_blank">
       Click to initialize
-    </div>
+    </a>
     <div
       v-if="!name.left && !name.center && !name.right"
       class="credit"
