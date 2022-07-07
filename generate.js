@@ -1,0 +1,224 @@
+const Bottleneck = require('bottleneck/es5');
+const { createWriteStream, emptyDir, writeFileSync } = require('fs-extra');
+const { gql } = require('graphql-request');
+const {
+  compact,
+  filter,
+  find,
+  flatMap,
+  intersection,
+  isNil,
+  map,
+  omitBy,
+  orderBy,
+} = require('lodash');
+const sequential = require('promise-sequential');
+const { pipeline } = require('stream');
+const { promisify } = require('util');
+
+const AL_RATE_LIMIT = 667;
+const ATM_RATE_LIMIT = 667;
+const MAX_MEDIA = 500;
+
+const popularAnimeQuery = gql`
+  query($page: Int) {
+    Page(page: $page) {
+      pageInfo {
+        currentPage
+        hasNextPage
+        perPage
+      }
+      media(isAdult: false, type: ANIME, sort: POPULARITY_DESC) {
+        id
+        format
+        relations {
+          edges {
+            node {
+              id
+              title {
+                english
+              }
+              relations {
+                edges {
+                  node {
+                    id
+                    title {
+                      english
+                    }
+                  }
+                  relationType(version: 2)
+                }
+              }
+            }
+            relationType(version: 2)
+          }
+        }
+        title {
+          english
+          romaji
+        }
+      }
+    }
+  }
+`;
+
+(async () => {
+  const { got } = await import('got');
+
+  let media = await got.paginate.all({
+    url: 'https://graphql.anilist.co',
+    method: 'POST',
+    searchParams: {
+      query: popularAnimeQuery,
+    },
+    pagination: {
+      transform: (response) => JSON.parse(response.body).data.Page.media,
+      paginate: ({ response }) => {
+        const { currentPage, hasNextPage, perPage } = JSON.parse(response.body).data.Page.pageInfo;
+        if (!hasNextPage) return false;
+        return {
+          searchParams: {
+            query: popularAnimeQuery,
+            variables: JSON.stringify({
+              page: currentPage + 1,
+              perPage,
+            }),
+          },
+        };
+      },
+      countLimit: MAX_MEDIA,
+      backoff: AL_RATE_LIMIT,
+    },
+  });
+
+  media = media.filter(({ format }) => /^TV(_SHORT)?|OVA|ONA$/.test(format));
+
+  const filterParents = (edges) => edges.filter(({ relationType }) => ['ALTERNATIVE', 'PARENT', 'PREQUEL', 'SEQUEL'].includes(relationType));
+
+  media = media.filter(({ id, relations }, index) => {
+    const prevMedia = media.slice(0, index);
+    const prevMediaIds = map(prevMedia, 'id');
+
+    const parents = filterParents(relations.edges);
+    let grandparents = filterParents(flatMap(parents, 'node.relations.edges'));
+    grandparents = grandparents.filter(({ node }) => node.id !== id);
+    const parentIds = map([...parents, ...grandparents], 'node.id');
+
+    return !intersection(prevMediaIds, parentIds).length;
+  });
+
+
+  const atmLimiter = new Bottleneck({ maxConcurrent: 1, minTime: ATM_RATE_LIMIT });
+
+  const getAtm = atmLimiter.wrap(async ({ path, paginate, ...params }) => {
+    const func = paginate ? got.paginate.all : got;
+    return func({
+      url: `https://api.animethemes.moe/${path}`,
+      resolveBodyOnly: true,
+      responseType: paginate ? 'text' : 'json',
+      ...params,
+    });
+  });
+
+  getAtm.paginate = ({ countLimit = Number.POSITIVE_INFINITY, searchParams, ...params }) => getAtm({
+    paginate: true,
+    searchParams: {
+      'page[size]': 100,
+      ...searchParams,
+    },
+    pagination: {
+      transform: (response) => {
+        const body = JSON.parse(response.body);
+        const mainKey = Object.keys(body).find((key) => key !== 'links' && key !== 'meta');
+        return body[mainKey];
+      },
+      paginate: ({ response }) => {
+        const { links } = JSON.parse(response.body);
+        if (links.next) return { url: new URL(links.next) };
+        return false;
+      },
+      countLimit,
+      backoff: ATM_RATE_LIMIT,
+    },
+    ...params,
+  });
+
+  let resources = await getAtm.paginate({
+    path: 'resource',
+    searchParams: {
+      'filter[external_id]': map(media, 'id').join(),
+      'filter[site]': 'AniList',
+      include: 'anime',
+    },
+  });
+  resources = filter(resources, 'anime.length');
+  resources = resources.map((resource) => ({
+    ...resource,
+    title: find(media, { id: resource.external_id }).title,
+  }));
+
+  const atmAnimeIds = compact(map(resources, 'anime[0].id'));
+
+  const animes = await getAtm.paginate({
+    path: 'anime',
+    searchParams: {
+      'fields[anime]': 'id',
+      'fields[animetheme]': 'id,type',
+      'fields[animethemeentry]': 'episodes,nsfw,spoiler',
+      'fields[video]': 'link,lyrics,nc,resolution,subbed',
+      'filter[anime][id]': atmAnimeIds.join(),
+      include: 'animethemes.animethemeentries.videos',
+    },
+  });
+
+  const videoLinks = compact(
+    animes.map(({ animethemes, id }) => {
+      let themes = filter(animethemes, { type: 'OP' });
+      if (!themes.length) themes = filter(animethemes, { type: 'ED' });
+
+      const themeEntries = flatMap(themes, 'animethemeentries');
+      const nonFirstEpEntries = themeEntries.filter(({ episodes }) => episodes !== '1');
+      const safeThemeEntry = find(nonFirstEpEntries, { nsfw: false, spoiler: false });
+      if (!safeThemeEntry) return null;
+
+      const bestVideos = filter(safeThemeEntry.videos, { lyrics: false, subbed: false });
+      const bestVideo = orderBy(bestVideos, ['nc', 'resolution'], ['desc', 'desc'])[0];
+      if (!bestVideo) return null;
+
+      const { title } = resources.find(({ anime }) => anime[0].id === id);
+      return { link: bestVideo.link, title };
+    }),
+  );
+
+  await emptyDir('./public/videos');
+
+  const pipelinePromise = promisify(pipeline);
+
+  const lettersOnly = (text) => text.toLowerCase().replace(/\W/g, '');
+
+  let videos = await sequential(
+    videoLinks.map(({ link, title }) => async () => {
+      const { pathname } = new URL(link);
+      await pipelinePromise(got.stream(link), createWriteStream(`./public/videos${pathname}`));
+
+      const englishTitle = title.english || title.romaji;
+      const romajiTitle = title.romaji || '';
+      let subtitle;
+      if (!lettersOnly(englishTitle).includes(lettersOnly(romajiTitle))) {
+        subtitle = title.romaji;
+      }
+
+      return omitBy(
+        {
+          title: englishTitle,
+          subtitle,
+          file: pathname,
+        },
+        isNil,
+      );
+    }),
+  );
+
+  videos = orderBy(videos, 'title');
+  writeFileSync('./src/assets/videos.json', JSON.stringify(videos));
+})();

@@ -72,7 +72,7 @@
 <script>
 import shuffleSeed from 'shuffle-seed';
 
-import videoList from './assets/videos.yml';
+import videoList from './assets/videos.json';
 
 import VideoClip from './components/VideoClip.vue';
 

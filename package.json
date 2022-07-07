@@ -6,11 +6,19 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "prod": "vue-cli-service serve --mode production",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "generate": "node generate"
   },
   "dependencies": {
+    "bottleneck": "^2.19.5",
     "bourbon": "^7.0.0",
     "core-js": "^3.6.4",
+    "fs-extra": "^10.1.0",
+    "got": "^12.1.0",
+    "graphql": "^16.5.0",
+    "graphql-request": "^4.2.0",
+    "lodash": "^4.17.21",
+    "promise-sequential": "^1.1.1",
     "random": "^2.2.0",
     "seedrandom": "^3.0.5",
     "shuffle-seed": "^1.1.6",
