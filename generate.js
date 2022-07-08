@@ -1,4 +1,3 @@
-const Bottleneck = require('bottleneck/es5');
 const { createWriteStream, emptyDir, writeFileSync } = require('fs-extra');
 const { gql } = require('graphql-request');
 const {
@@ -16,8 +15,6 @@ const sequential = require('promise-sequential');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 
-const AL_RATE_LIMIT = 667;
-const ATM_RATE_LIMIT = 667;
 const MAX_MEDIA = 500;
 
 const popularAnimeQuery = gql`
@@ -87,7 +84,6 @@ const popularAnimeQuery = gql`
         };
       },
       countLimit: MAX_MEDIA,
-      backoff: AL_RATE_LIMIT,
     },
   });
 
@@ -107,10 +103,7 @@ const popularAnimeQuery = gql`
     return !intersection(prevMediaIds, parentIds).length;
   });
 
-
-  const atmLimiter = new Bottleneck({ maxConcurrent: 1, minTime: ATM_RATE_LIMIT });
-
-  const getAtm = atmLimiter.wrap(async ({ path, paginate, ...params }) => {
+  const getAtm = async ({ path, paginate, ...params }) => {
     const func = paginate ? got.paginate.all : got;
     return func({
       url: `https://api.animethemes.moe/${path}`,
@@ -118,7 +111,7 @@ const popularAnimeQuery = gql`
       responseType: paginate ? 'text' : 'json',
       ...params,
     });
-  });
+  };
 
   getAtm.paginate = ({ countLimit = Number.POSITIVE_INFINITY, searchParams, ...params }) => getAtm({
     paginate: true,
@@ -138,7 +131,6 @@ const popularAnimeQuery = gql`
         return false;
       },
       countLimit,
-      backoff: ATM_RATE_LIMIT,
     },
     ...params,
   });

@@ -10,7 +10,6 @@
     "generate": "node generate"
   },
   "dependencies": {
-    "bottleneck": "^2.19.5",
     "bourbon": "^7.0.0",
     "core-js": "^3.6.4",
     "fs-extra": "^10.1.0",
