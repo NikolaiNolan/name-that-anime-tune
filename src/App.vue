@@ -72,11 +72,13 @@
 <script>
 import shuffleSeed from 'shuffle-seed';
 
-import videoList from './assets/videos.json';
+import easyVideoList from './assets/videos-easy.json';
+import hardVideoList from './assets/videos-hard.json';
 
 import VideoClip from './components/VideoClip.vue';
 
-const videos = shuffleSeed.shuffle(videoList, new Date().setHours(0, 0, 0, 0));
+const easyVideos = shuffleSeed.shuffle(easyVideoList, new Date().setHours(0, 0, 0, 0));
+const hardVideos = shuffleSeed.shuffle(hardVideoList, new Date().setHours(0, 0, 0, 0));
 
 const channel = new BroadcastChannel('channel');
 
@@ -89,6 +91,7 @@ export default {
   data() {
     return {
       initialized: false,
+      difficulty: 'easy',
       index: 0,
       playing: false,
       reviewing: false,
@@ -106,11 +109,14 @@ export default {
     };
   },
   computed: {
+    videos() {
+      return this.difficulty === 'easy' ? easyVideos : hardVideos;
+    },
     currentVideo() {
-      return videos[this.index];
+      return this.videos[this.index];
     },
     nextVideo() {
-      return videos[this.index + 1];
+      return this.videos[this.index + 1];
     },
   },
   watch: {
@@ -139,6 +145,12 @@ export default {
     init() {
       this.postMessage({ video: this.currentVideo });
       this.initialized = true;
+    },
+    easy() {
+      this.difficulty = 'easy';
+    },
+    hard() {
+      this.difficulty = 'hard';
     },
     preview() {
       this.previewing = true;

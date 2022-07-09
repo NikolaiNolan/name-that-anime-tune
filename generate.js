@@ -4,6 +4,7 @@ const {
   compact,
   filter,
   find,
+  findIndex,
   flatMap,
   intersection,
   isNil,
@@ -15,7 +16,9 @@ const sequential = require('promise-sequential');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 
-const MAX_MEDIA = 500;
+const MAX_MEDIA = 750;
+const MAX_EASY = 300;
+const MAX_HARD = 100;
 
 const popularAnimeQuery = gql`
   query($page: Int) {
@@ -147,6 +150,7 @@ const popularAnimeQuery = gql`
   resources = resources.map((resource) => ({
     ...resource,
     title: find(media, { id: resource.external_id }).title,
+    rank: findIndex(media, { id: resource.external_id }),
   }));
 
   const atmAnimeIds = compact(map(resources, 'anime[0].id'));
@@ -163,36 +167,43 @@ const popularAnimeQuery = gql`
     },
   });
 
-  const videoLinks = compact(
-    animes.map(({ animethemes, id }) => {
-      let themes = filter(animethemes, { type: 'OP' });
-      if (!themes.length) themes = filter(animethemes, { type: 'ED' });
+  let videoLinks = animes.map(({ animethemes, id }) => {
+    let themes = filter(animethemes, { type: 'OP' });
+    if (!themes.length) themes = filter(animethemes, { type: 'ED' });
 
-      const themeEntries = flatMap(themes, 'animethemeentries');
-      const nonFirstEpEntries = themeEntries.filter(({ episodes }) => episodes !== '1');
-      const safeThemeEntry = find(nonFirstEpEntries, { nsfw: false, spoiler: false });
-      if (!safeThemeEntry) return null;
+    const themeEntries = flatMap(themes, 'animethemeentries');
+    const nonFirstEpEntries = themeEntries.filter(({ episodes }) => episodes !== '1');
+    const safeThemeEntry = find(nonFirstEpEntries, { nsfw: false, spoiler: false });
+    if (!safeThemeEntry) return null;
 
-      const bestVideos = filter(safeThemeEntry.videos, { lyrics: false, subbed: false });
-      const bestVideo = orderBy(bestVideos, ['nc', 'resolution'], ['desc', 'desc'])[0];
-      if (!bestVideo) return null;
+    const bestVideos = filter(safeThemeEntry.videos, { lyrics: false, subbed: false });
+    const bestVideo = orderBy(bestVideos, ['nc', 'resolution'], ['desc', 'desc'])[0];
+    if (!bestVideo) return null;
 
-      const { title } = resources.find(({ anime }) => anime[0].id === id);
-      return { link: bestVideo.link, title };
-    }),
-  );
+    const { rank, title } = resources.find(({ anime }) => anime[0].id === id);
+    const { pathname } = new URL(bestVideo.link);
+    return {
+      link: bestVideo.link,
+      pathname,
+      rank,
+      title,
+    };
+  });
+  videoLinks = orderBy(compact(videoLinks), 'rank');
+
+  const easyVideoLinks = videoLinks.slice(0, MAX_EASY);
+  const hardVideoLinks = videoLinks.slice(MAX_EASY, MAX_EASY + MAX_HARD);
 
   await emptyDir('./public/videos');
 
   const pipelinePromise = promisify(pipeline);
+  await sequential(
+    [...easyVideoLinks, ...hardVideoLinks].map(({ link, pathname }) => async () => pipelinePromise(got.stream(link), createWriteStream(`./public/videos${pathname}`))),
+  );
 
   const lettersOnly = (text) => text.toLowerCase().replace(/\W/g, '');
-
-  let videos = await sequential(
-    videoLinks.map(({ link, title }) => async () => {
-      const { pathname } = new URL(link);
-      await pipelinePromise(got.stream(link), createWriteStream(`./public/videos${pathname}`));
-
+  [easyVideoLinks, hardVideoLinks].forEach((videoLinkGroup, index) => {
+    const videos = videoLinkGroup.map(({ pathname, title }) => {
       const englishTitle = title.english || title.romaji;
       const romajiTitle = title.romaji || '';
       let subtitle;
@@ -208,9 +219,8 @@ const popularAnimeQuery = gql`
         },
         isNil,
       );
-    }),
-  );
+    });
 
-  videos = orderBy(videos, 'title');
-  writeFileSync('./src/assets/videos.json', JSON.stringify(videos));
+    writeFileSync(`./src/assets/videos-${index ? 'hard' : 'easy'}.json`, JSON.stringify(videos));
+  });
 })();

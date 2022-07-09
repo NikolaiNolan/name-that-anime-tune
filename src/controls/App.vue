@@ -1,8 +1,8 @@
 <template>
   <div>
     #{{index}}<br>
-    {{video.title}}<br>
-    {{video.subtitle}}<br>
+    <div class="title">{{video.title}}<br></div>
+    <div class="title">{{video.subtitle}}<br></div>
     Left player: <input v-model="name.left" /><br>
     <input
       type="number"
@@ -31,6 +31,9 @@
     <button @click="index -= 1; postMessage('previous')">Previous song</button>
     <button @click="index += 1; postMessage('next')">Next song</button>
     <button @click="index += 1; postMessage('nextPlay')">Next song and play</button>
+    <br>
+    <button @click="postMessage('easy')">Easy</button>
+    <button @click="postMessage('hard')">Hard</button>
   </div>
 </template>
 
@@ -107,5 +110,11 @@ export default {
   input,
   button {
     font: inherit;
+  }
+
+  .title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 </style>
