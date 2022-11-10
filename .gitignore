@@ -21,3 +21,5 @@ yarn-error.log*
 *.sw?
 
 /public/videos
+/src/assets/videos-easy.json
+/src/assets/videos-hard.json
