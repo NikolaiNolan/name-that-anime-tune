@@ -17,7 +17,7 @@ const { pipeline } = require('stream');
 const { promisify } = require('util');
 
 const MAX_MEDIA = 750;
-const MAX_EASY = 300;
+const MAX_EASY = 200;
 const MAX_HARD = 100;
 
 const popularAnimeQuery = gql`
